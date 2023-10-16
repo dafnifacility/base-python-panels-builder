@@ -1,0 +1,9 @@
+python-dotenv==1.0.0
+dafni-cli==1.0.1
+numpy==1.23.2
+python-dateutil==2.8.2
+pytz==2020.1
+tzdata==2022.1
+pandas==2.1.1
+panel==1.2.3
+hvplot==0.8.4
