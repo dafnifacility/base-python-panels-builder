@@ -1,3 +1,5 @@
+# WORK IN PROGRESS DO NOT USE
+
 A visualisation builder that uses python panels to visualise a dataset on DAFNI. This is purely intended as a base example repository.
 
 docker build -t panels-app .
