@@ -1,9 +1,27 @@
+from http.cookies import BaseCookie
+
 import hvplot.pandas
+from bokeh.server.contexts import BokehSessionContext
+from dafni_cli.api.session import SessionData
+from keycloak import KeycloakOpenID
 from numpy import abs
 from pandas import read_csv
-from panel import Column, bind, extension, widgets
+from panel import Column, bind, extension, serve, state, widgets
+from panel.io.location import Location
 
-from settings import DATA_LOCATION
+from settings import DATA_LOCATION, KEYCLOAK_SECRET, VISUALISATION_INSTANCE
+
+# --- DAFNI code ---
+
+
+def download_data(context: BokehSessionContext):
+    print("STATE ", state.user, state.access_token)
+    # SessionData(username=)
+
+    return
+
+
+# --- Panel code ---
 
 extension(design="material")
 
@@ -42,4 +60,25 @@ bound_plot = bind(
 )
 first_app = Column(variable_widget, window_widget, sigma_widget, bound_plot)
 
-first_app.servable()
+
+print(state.cookies)
+
+
+state.on_session_created(download_data)
+
+base_url = "https://keycloak.staging.dafni.rl.ac.uk/auth/realms/testrealm/protocol/openid-connect/"
+serve(
+    {f"{VISUALISATION_INSTANCE}": first_app},
+    title="DAFNI Visualisation",
+    verbose=True,
+    port=3000,
+    oauth_provider="generic",
+    oauth_key="dafni-main",
+    oauth_secret=KEYCLOAK_SECRET,
+    oauth_extra_params={
+        "TOKEN_URL": f"{base_url}token",
+        "AUTHORIZE_URL": f"{base_url}auth",
+        "USER_URL": f"{base_url}userinfo",
+    },
+    cookie_secret="dafni",
+)
