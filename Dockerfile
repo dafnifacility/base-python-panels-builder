@@ -13,6 +13,5 @@ RUN pip install --no-cache-dir --compile -r /code/requirements.txt \
     && rm -rf /var/lib/apt/lists/*
 
 COPY *.py /code/
-COPY run_app.sh /code/run_app.sh
 WORKDIR /code
-CMD ./run_app.sh
+CMD python panels-app.py 

@@ -1,25 +1,38 @@
 import datetime
 from http.cookies import BaseCookie
 from pathlib import Path
+from threading import Thread
 
 import hvplot.pandas
 from bokeh.models import ColumnDataSource
 from bokeh.server.contexts import BokehSessionContext
 from dafni_cli.api.datasets_api import get_latest_dataset_metadata
-from dafni_cli.api.session import DAFNISession, SessionData
+from dafni_cli.api.session import DAFNISession, LoginError, SessionData
 from dafni_cli.datasets.dataset_download import download_dataset
 from dafni_cli.datasets.dataset_metadata import DataFile
 from keycloak import KeycloakOpenID
 from numpy import abs
 from pandas import read_csv
-from panel import Column, Row, bind, extension, indicators, pane, serve, state, widgets
+from panel import (
+    Column,
+    Row,
+    bind,
+    config,
+    extension,
+    indicators,
+    pane,
+    panel,
+    serve,
+    state,
+    widgets,
+)
 from panel.io.location import Location
 
 from settings import DATA_LOCATION, KEYCLOAK_SECRET, VISUALISATION_INSTANCE
 
 # --- Panel code ---
 
-extension(design="material")
+extension(design="material", loading_indicator=True, template="bootstrap")
 
 loading = indicators.LoadingSpinner(value=True, size=20, name="Downloading data...")
 app = Column(loading)
@@ -60,7 +73,10 @@ def download_to_files(session: DAFNISession, dataset_uuid: str):
     download_dataset(session, files, dir)
 
 
-async def download_data(*args, **kwargs):
+def download_data(context: BokehSessionContext, *args, **kwargs):
+    if state.user == "testadmin@example.com":
+        # This seems to be default value from panel
+        return
     timestamp = datetime.datetime.now() + datetime.timedelta(seconds=60)
     session_data = SessionData(
         username=state.user,
@@ -68,10 +84,15 @@ async def download_data(*args, **kwargs):
         refresh_token=state.refresh_token,
         timestamp_to_refresh=timestamp.timestamp(),
     )
+    print("REFRESH???", state.refresh_token)
     session = DAFNISession(session_data=session_data)
-    vis_instance = session.get_request(
-        f"https://dafni-nivs-api.secure.dafni.rl.ac.uk/instances/{VISUALISATION_INSTANCE}"
-    )
+    try:
+        vis_instance = session.get_request(
+            f"https://dafni-nivs-api.secure.dafni.rl.ac.uk/instances/{VISUALISATION_INSTANCE}"
+        )
+    except LoginError:
+        context.session.destroy()
+    print("Hello", vis_instance)
     # Just doing this to get it working, obviously there's going to be a better way to do it
     dataset_uuid = None
     for dataset in vis_instance.get("visualisation_assets"):
@@ -82,8 +103,6 @@ async def download_data(*args, **kwargs):
     data = read_csv(csv_file, parse_dates=["YearMonth"], index_col="YearMonth")
 
     data.tail()
-    create_plot(data, variable="Values", window=20, sigma=10)
-
     variable_widget = widgets.Select(
         name="variable", value="Values", options=list(data.columns)
     )
@@ -99,8 +118,18 @@ async def download_data(*args, **kwargs):
     app.objects = [variable_widget, window_widget, sigma_widget, bound_plot]
 
 
+def add_load(context, *args, **kwargs):
+    state.onload(download_data, context)
+
+
+def logout(*args, **kwargs):
+    state.clear_caches()
+
+
 base_url = "https://keycloak.secure.dafni.rl.ac.uk/auth/realms/Production/protocol/openid-connect/"
-state.onload(download_data)
+state.on_session_created(download_data)
+config.reuse_sessions = False  #
+config.log_level = "INFO"
 serve(
     {f"{VISUALISATION_INSTANCE}": app},
     title="DAFNI Visualisation",
