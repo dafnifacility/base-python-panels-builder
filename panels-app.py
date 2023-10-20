@@ -1,15 +1,24 @@
 import datetime
+import json
+import os
+import time
+from dataclasses import dataclass
 from http.cookies import BaseCookie
+from io import BufferedReader
 from pathlib import Path
-from threading import Thread
 
+import click
 import hvplot.pandas
+import requests
 from bokeh.models import ColumnDataSource
 from bokeh.server.contexts import BokehSessionContext
 from dafni_cli.api.datasets_api import get_latest_dataset_metadata
-from dafni_cli.api.session import DAFNISession, LoginError, SessionData
+from dafni_cli.api.exceptions import DAFNIError, EndpointNotFoundError, LoginError
+from dafni_cli.api.session import DAFNISession, LoginError, LoginResponse, SessionData
+from dafni_cli.consts import LOGIN_API_ENDPOINT, REQUESTS_TIMEOUT
 from dafni_cli.datasets.dataset_download import download_dataset
 from dafni_cli.datasets.dataset_metadata import DataFile
+from dafni_cli.utils import dataclass_from_dict
 from keycloak import KeycloakOpenID
 from numpy import abs
 from pandas import read_csv
@@ -27,6 +36,7 @@ from panel import (
     widgets,
 )
 from panel.io.location import Location
+from requests import HTTPError
 
 from settings import DATA_LOCATION, KEYCLOAK_SECRET, VISUALISATION_INSTANCE
 
@@ -58,6 +68,40 @@ def create_plot(data, variable="Values", window=30, sigma=10):
 # --- DAFNI code ---
 
 
+class VisDAFNISession(DAFNISession):
+    def _refresh_tokens(self):
+        # Request a new refresh token
+        response = requests.post(
+            LOGIN_API_ENDPOINT,
+            data={
+                "client_id": "dafni-main",
+                "grant_type": "refresh_token",
+                "refresh_token": self._session_data.refresh_token,
+            },
+            timeout=REQUESTS_TIMEOUT,
+        )
+        print(self._session_data.refresh_token)
+        print(response.raw)
+        if response.status_code == 400 and response.json()["error"] == "invalid_grant":
+            print("No")
+        #     # This means the refresh token has expired, so login again
+        #     self.attempt_login()
+        else:
+            response.raise_for_status()
+
+            login_response = dataclass_from_dict(LoginResponse, response.json())
+
+            if not login_response.was_successful():
+                raise LoginError("Unable to refresh login.")
+
+            self._session_data = SessionData.from_login_response(
+                self._session_data.username, login_response
+            )
+
+            if self._use_session_data_file:
+                self._save_session_data()
+
+
 def download_to_files(session: DAFNISession, dataset_uuid: str):
     dir = Path(f"{DATA_LOCATION}{dataset_uuid}")
     dataset_json = get_latest_dataset_metadata(session, dataset_uuid)
@@ -73,7 +117,7 @@ def download_to_files(session: DAFNISession, dataset_uuid: str):
     download_dataset(session, files, dir)
 
 
-def download_data(context: BokehSessionContext, *args, **kwargs):
+def download_data(context: BokehSessionContext):
     if state.user == "testadmin@example.com":
         # This seems to be default value from panel
         return
@@ -84,14 +128,16 @@ def download_data(context: BokehSessionContext, *args, **kwargs):
         refresh_token=state.refresh_token,
         timestamp_to_refresh=timestamp.timestamp(),
     )
+    print("user???", state.user)
+    print("cookies ???", state.cookies)
     print("REFRESH???", state.refresh_token)
-    session = DAFNISession(session_data=session_data)
+    session = VisDAFNISession(session_data=session_data)
     try:
         vis_instance = session.get_request(
             f"https://dafni-nivs-api.secure.dafni.rl.ac.uk/instances/{VISUALISATION_INSTANCE}"
         )
     except LoginError:
-        context.session.destroy()
+        return False
     print("Hello", vis_instance)
     # Just doing this to get it working, obviously there's going to be a better way to do it
     dataset_uuid = None
@@ -116,6 +162,7 @@ def download_data(context: BokehSessionContext, *args, **kwargs):
         sigma=sigma_widget,
     )
     app.objects = [variable_widget, window_widget, sigma_widget, bound_plot]
+    return True
 
 
 def add_load(context, *args, **kwargs):
@@ -127,9 +174,10 @@ def logout(*args, **kwargs):
 
 
 base_url = "https://keycloak.secure.dafni.rl.ac.uk/auth/realms/Production/protocol/openid-connect/"
-state.on_session_created(download_data)
-config.reuse_sessions = False  #
+# state.on_session_created(download_data)
+config.reuse_sessions = False
 config.log_level = "INFO"
+config.authorize_callback = download_data
 serve(
     {f"{VISUALISATION_INSTANCE}": app},
     title="DAFNI Visualisation",
@@ -144,4 +192,6 @@ serve(
         "USER_URL": f"{base_url}userinfo",
     },
     cookie_secret="dafni",
+    # done in days ~5 mins
+    oauth_expiry=0.003,
 )
