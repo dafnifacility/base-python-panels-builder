@@ -16,7 +16,12 @@ from pandas import read_csv
 from panel import Column, bind, config, extension, indicators, serve, state, widgets
 from panel.io.liveness import LivenessHandler
 
-from settings import DATA_LOCATION, KEYCLOAK_SECRET, VISUALISATION_INSTANCE
+from settings import (
+    DATA_LOCATION,
+    KEYCLOAK_SECRET,
+    LOCAL_DEPLOYMENT,
+    VISUALISATION_INSTANCE,
+)
 
 # --- Panel code ---
 
@@ -159,9 +164,13 @@ config.reuse_sessions = False
 config.log_level = "INFO"
 config.authorize_callback = download_data
 
+dafni_endpoint = f"/instance/{VISUALISATION_INSTANCE}/"
+dafni_redirect_uri = f"https://vis.secure.dafni.rl.ac.uk"
+if LOCAL_DEPLOYMENT:
+    dafni_redirect_uri = f"http://localhost:3000"
 server = serve(
-    {f"{VISUALISATION_INSTANCE}": app},
-    prefix="instance",
+    app,
+    prefix=dafni_endpoint,
     title="DAFNI Visualisation",
     verbose=True,
     port=3000,
@@ -173,12 +182,13 @@ server = serve(
         "AUTHORIZE_URL": f"{base_url}auth",
         "USER_URL": f"{base_url}userinfo",
     },
+    oauth_redirect_uri=f"{dafni_redirect_uri}{VISUALISATION_INSTANCE}/",
     cookie_secret="dafni",
     # done in days ~5 mins
     oauth_expiry=0.003,
     extra_patterns=[
         (
-            r"/liveness",
+            r"liveness",
             LivenessHandler,
             dict(applications={f"{VISUALISATION_INSTANCE}": app}),
         )
