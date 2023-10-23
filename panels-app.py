@@ -182,15 +182,15 @@ server = serve(
         "AUTHORIZE_URL": f"{base_url}auth",
         "USER_URL": f"{base_url}userinfo",
     },
-    oauth_redirect_uri=f"{dafni_redirect_uri}{VISUALISATION_INSTANCE}/",
+    oauth_redirect_uri=f"{dafni_redirect_uri}{dafni_endpoint}",
     cookie_secret="dafni",
     # done in days ~5 mins
     oauth_expiry=0.003,
     extra_patterns=[
         (
-            r"liveness",
+            r"/liveness",
             LivenessHandler,
-            dict(applications={f"{VISUALISATION_INSTANCE}": app}),
+            dict(applications={dafni_endpoint: app}),
         )
     ],
 )
