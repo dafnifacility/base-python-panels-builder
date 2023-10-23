@@ -161,6 +161,7 @@ config.authorize_callback = download_data
 
 server = serve(
     {f"{VISUALISATION_INSTANCE}": app},
+    prefix="instance",
     title="DAFNI Visualisation",
     verbose=True,
     port=3000,
