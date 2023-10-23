@@ -35,6 +35,7 @@ from panel import (
     state,
     widgets,
 )
+from panel.io.liveness import LivenessHandler
 from panel.io.location import Location
 from requests import HTTPError
 
@@ -118,9 +119,11 @@ def download_to_files(session: DAFNISession, dataset_uuid: str):
 
 
 def download_data(context: BokehSessionContext):
+    if state.location.pathname == "healthz" or state.location.pathname == "liveness":
+        return True
     if state.user == "testadmin@example.com":
         # This seems to be default value from panel
-        return
+        return False
     timestamp = datetime.datetime.now() + datetime.timedelta(seconds=60)
     session_data = SessionData(
         username=state.user,
@@ -178,7 +181,8 @@ base_url = "https://keycloak.secure.dafni.rl.ac.uk/auth/realms/Production/protoc
 config.reuse_sessions = False
 config.log_level = "INFO"
 config.authorize_callback = download_data
-serve(
+
+server = serve(
     {f"{VISUALISATION_INSTANCE}": app},
     title="DAFNI Visualisation",
     verbose=True,
@@ -194,4 +198,11 @@ serve(
     cookie_secret="dafni",
     # done in days ~5 mins
     oauth_expiry=0.003,
+    extra_patterns=[
+        (
+            r"/liveness",
+            LivenessHandler,
+            dict(applications={f"{VISUALISATION_INSTANCE}": app}),
+        )
+    ],
 )
