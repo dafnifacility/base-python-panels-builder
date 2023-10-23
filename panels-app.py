@@ -1,43 +1,20 @@
 import datetime
-import json
-import os
-import time
-from dataclasses import dataclass
-from http.cookies import BaseCookie
-from io import BufferedReader
 from pathlib import Path
 
-import click
 import hvplot.pandas
 import requests
-from bokeh.models import ColumnDataSource
 from bokeh.server.contexts import BokehSessionContext
 from dafni_cli.api.datasets_api import get_latest_dataset_metadata
-from dafni_cli.api.exceptions import DAFNIError, EndpointNotFoundError, LoginError
+from dafni_cli.api.exceptions import LoginError
 from dafni_cli.api.session import DAFNISession, LoginError, LoginResponse, SessionData
 from dafni_cli.consts import LOGIN_API_ENDPOINT, REQUESTS_TIMEOUT
 from dafni_cli.datasets.dataset_download import download_dataset
 from dafni_cli.datasets.dataset_metadata import DataFile
 from dafni_cli.utils import dataclass_from_dict
-from keycloak import KeycloakOpenID
 from numpy import abs
 from pandas import read_csv
-from panel import (
-    Column,
-    Row,
-    bind,
-    config,
-    extension,
-    indicators,
-    pane,
-    panel,
-    serve,
-    state,
-    widgets,
-)
+from panel import Column, bind, config, extension, indicators, serve, state, widgets
 from panel.io.liveness import LivenessHandler
-from panel.io.location import Location
-from requests import HTTPError
 
 from settings import DATA_LOCATION, KEYCLOAK_SECRET, VISUALISATION_INSTANCE
 
