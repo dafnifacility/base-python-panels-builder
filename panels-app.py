@@ -186,6 +186,7 @@ server = serve(
     cookie_secret="dafni",
     # done in days ~5 mins
     oauth_expiry=0.003,
+    websocket_origin=["localhost:3000", "vis.secure.dafni.rl.ac.uk"],
     extra_patterns=[
         (
             r"/liveness",
