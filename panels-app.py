@@ -13,7 +13,17 @@ from dafni_cli.datasets.dataset_metadata import DataFile
 from dafni_cli.utils import dataclass_from_dict
 from numpy import abs
 from pandas import read_csv
-from panel import Column, bind, config, extension, indicators, serve, state, widgets
+from panel import (
+    Column,
+    bind,
+    config,
+    extension,
+    indicators,
+    serve,
+    state,
+    template,
+    widgets,
+)
 from panel.io.liveness import LivenessHandler
 
 from settings import (
@@ -28,7 +38,11 @@ from settings import (
 extension(design="material", loading_indicator=True, template="bootstrap")
 
 loading = indicators.LoadingSpinner(value=True, size=20, name="Downloading data...")
-app = Column(loading)
+app = Column()
+dafni_template = template.MaterialTemplate(title="DAFNI Visualisation")
+dafni_template.header_background = "#000000de"
+dafni_template.favicon = "static/favicon.png"
+dafni_template.main.append(app)
 
 
 def transform_data(data, variable, window, sigma):
@@ -88,6 +102,8 @@ class VisDAFNISession(DAFNISession):
 def download_to_files(session: DAFNISession, dataset_uuid: str):
     dir = Path(f"{DATA_LOCATION}{dataset_uuid}")
     dataset_json = get_latest_dataset_metadata(session, dataset_uuid)
+    if dir.exists():
+        return
     files = [
         DataFile(
             d["spdx:fileName"],
@@ -150,26 +166,21 @@ def download_data(context: BokehSessionContext):
     return True
 
 
-def add_load(context, *args, **kwargs):
-    state.onload(download_data, context)
-
-
-def logout(*args, **kwargs):
-    state.clear_caches()
-
-
 base_url = "https://keycloak.secure.dafni.rl.ac.uk/auth/realms/Production/protocol/openid-connect/"
 # state.on_session_created(download_data)
 config.reuse_sessions = False
-config.log_level = "INFO"
+config.log_level = "DEBUG"
 config.authorize_callback = download_data
+# done in days ~5 mins
+config.oauth_expiry = 0.003
+config.autoreload = True
 
 dafni_endpoint = f"/instance/{VISUALISATION_INSTANCE}/"
 dafni_redirect_uri = f"https://vis.secure.dafni.rl.ac.uk"
 if LOCAL_DEPLOYMENT:
     dafni_redirect_uri = f"http://localhost:3000"
 server = serve(
-    app,
+    dafni_template,
     prefix=dafni_endpoint,
     title="DAFNI Visualisation",
     verbose=True,
@@ -182,16 +193,15 @@ server = serve(
         "AUTHORIZE_URL": f"{base_url}auth",
         "USER_URL": f"{base_url}userinfo",
     },
+    oauth_refresh_tokens=True,
     oauth_redirect_uri=f"{dafni_redirect_uri}{dafni_endpoint}",
     cookie_secret="dafni",
-    # done in days ~5 mins
-    oauth_expiry=0.003,
     websocket_origin=["localhost:3000", "vis.secure.dafni.rl.ac.uk"],
     extra_patterns=[
         (
             r"/liveness",
             LivenessHandler,
-            dict(applications={dafni_endpoint: app}),
+            dict(applications={dafni_endpoint: dafni_template}),
         )
     ],
 )
