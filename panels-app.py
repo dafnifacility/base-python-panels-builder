@@ -77,10 +77,8 @@ class VisDAFNISession(DAFNISession):
             },
             timeout=REQUESTS_TIMEOUT,
         )
-        print(self._session_data.refresh_token)
-        print(response.raw)
         if response.status_code == 400 and response.json()["error"] == "invalid_grant":
-            print("No")
+            pass
         #     # This means the refresh token has expired, so login again
         #     self.attempt_login()
         else:
@@ -129,9 +127,6 @@ def download_data(context: BokehSessionContext):
         refresh_token=state.refresh_token,
         timestamp_to_refresh=timestamp.timestamp(),
     )
-    print("user???", state.user)
-    print("cookies ???", state.cookies)
-    print("REFRESH???", state.refresh_token)
     session = VisDAFNISession(session_data=session_data)
     try:
         vis_instance = session.get_request(
@@ -139,7 +134,6 @@ def download_data(context: BokehSessionContext):
         )
     except LoginError:
         return False
-    print("Hello", vis_instance)
     # Just doing this to get it working, obviously there's going to be a better way to do it
     dataset_uuid = None
     for dataset in vis_instance.get("visualisation_assets"):

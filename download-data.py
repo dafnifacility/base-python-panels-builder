@@ -7,7 +7,6 @@ from dafni_cli.datasets.dataset_metadata import DataFile
 
 from settings import DAFNI_PASSWORD, DAFNI_USERNAME, DATA_LOCATION
 
-print("GOT CREDS - ", DAFNI_USERNAME, DAFNI_PASSWORD)
 session = DAFNISession.login(DAFNI_USERNAME, DAFNI_PASSWORD)
 
 dataset_json = get_latest_dataset_metadata(
