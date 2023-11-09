@@ -6,4 +6,4 @@ docker build -t panels-app .
 
 docker run  --env-file ./.env -p 3000:3000 panels-app
 
-panel serve panels-app.py --autoreload --show --port=3000
+python panels-app.py
