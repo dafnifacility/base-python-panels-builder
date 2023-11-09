@@ -1,3 +1,4 @@
+import datetime
 from pathlib import Path
 
 import requests
@@ -8,9 +9,9 @@ from dafni_cli.consts import LOGIN_API_ENDPOINT, REQUESTS_TIMEOUT
 from dafni_cli.datasets.dataset_download import download_dataset
 from dafni_cli.datasets.dataset_metadata import DataFile
 from dafni_cli.utils import dataclass_from_dict
-from panel import Column, template
+from panel import Column, state, template
 
-from settings import DATA_LOCATION
+from settings import DATA_LOCATION, VISUALISATION_INSTANCE
 
 dafni_template = template.MaterialTemplate(title="DAFNI Visualisation")
 dafni_template.header_background = "#000000de"
@@ -51,7 +52,32 @@ class VisDAFNISession(DAFNISession):
                 self._save_session_data()
 
 
-def download_to_files(session: DAFNISession, dataset_uuid: str):
+def get_dafni_session(state: state) -> VisDAFNISession:
+    if state.location.pathname == "healthz" or state.location.pathname == "liveness":
+        return True
+    if state.user == "testadmin@example.com":
+        # This seems to be default value from panel
+        return False
+    timestamp = datetime.datetime.now() + datetime.timedelta(seconds=60)
+    session_data = SessionData(
+        username=state.user,
+        access_token=state.access_token,
+        refresh_token=state.refresh_token,
+        timestamp_to_refresh=timestamp.timestamp(),
+    )
+    return VisDAFNISession(session_data=session_data)
+
+
+def get_vis_instance(session: VisDAFNISession):
+    try:
+        return session.get_request(
+            f"https://dafni-nivs-api.secure.dafni.rl.ac.uk/instances/{VISUALISATION_INSTANCE}"
+        )
+    except LoginError:
+        return False
+
+
+def download_files_from_dataset(session: VisDAFNISession, dataset_uuid: str):
     dir = Path(f"{DATA_LOCATION}{dataset_uuid}")
     dataset_json = get_latest_dataset_metadata(session, dataset_uuid)
     if dir.exists():
@@ -66,3 +92,13 @@ def download_to_files(session: DAFNISession, dataset_uuid: str):
         for d in dataset_json["dcat:distribution"]
     ]
     download_dataset(session, files, dir)
+
+
+def download_datasets_for_instance(
+    session: VisDAFNISession, instance: dict[str, dict]
+) -> None:
+    dataset_uuid = None
+    for dataset in instance.get("visualisation_assets"):
+        dataset_uuid = dataset.get("asset_id")
+        download_files_from_dataset(session, dataset_uuid)
+        yield dataset
